@@ -53,7 +53,7 @@ namespace NetPasswordSDK
                 
                 // Query propreties
                 propertyInfo = PasswordRequestType.GetProperty("AppID");
-                propertyInfo.SetValue(passRequest,"dotnet", null);
+                propertyInfo.SetValue(passRequest,"rpa01", null);
                 
                 // Was replaced by Query instead of passing the parameters, why do I need to place the object of type VirtualUserName
                 propertyInfo = PasswordRequestType.GetProperty("Query");
