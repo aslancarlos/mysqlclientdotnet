@@ -1,139 +1,100 @@
-﻿// See https://aka.ms/new-console-template for more information
-//Console.WriteLine("Hello, World!");
-
+﻿
 using System;
-using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Reflection;
-using System.Reflection.Metadata;
-using System.Security.Cryptography.X509Certificates;
-using Microsoft.VisualBasic;
+using System.Threading.Tasks;
 using MySqlConnector;
-
 
 namespace NetPasswordSDK
 {
-  
     class Program
     {
         static async Task Main(string[] args)
         {
             const string SDK_FOLDER_PATH = "./dll/";
+            string sdkPath = Path.Combine(SDK_FOLDER_PATH, "NetStandardPasswordSDK.dll");
 
-            // Load the dll dynamically
-            var sdkDll = Assembly.LoadFrom(Path.Combine(SDK_FOLDER_PATH, "NetStandardPasswordSDK.dll"));
-            
-            // get the types from the dll
-            Type PasswordSDKType = sdkDll.GetType("CyberArk.AAM.NetStandardPasswordSDK.PasswordSDK");
-            Type PasswordRequestType = sdkDll.GetType("CyberArk.AAM.NetStandardPasswordSDK.PSDKPasswordRequest");
-            Type PasswordSDKExceptionType = sdkDll.GetType("CyberArk.AAM.NetStandardPasswordSDK.Exceptions.PSDKException");
-            Type PasswordResponseType = sdkDll.GetType("CyberArk.AAM.NetStandardPasswordSDK.PSDKPassword");
+            // Carrega a DLL do SDK
+            var sdkDll = Assembly.LoadFrom(sdkPath);
+            var PasswordSDKType = sdkDll.GetType("CyberArk.AAM.NetStandardPasswordSDK.PasswordSDK");
+            var PasswordRequestType = sdkDll.GetType("CyberArk.AAM.NetStandardPasswordSDK.PSDKPasswordRequest");
+            var PasswordResponseType = sdkDll.GetType("CyberArk.AAM.NetStandardPasswordSDK.PSDKPassword");
 
+            if (PasswordSDKType == null || PasswordRequestType == null || PasswordResponseType == null)
+            {
+                Console.WriteLine("Erro ao carregar tipos da DLL.");
+                return;
+            }
 
-            object passwordResponse = null;
-            
+            object? passwordResponse = null;
 
             try
             {
-                // Create Password Request
-                ConstructorInfo ctor = PasswordRequestType.GetConstructor(System.Type.EmptyTypes);
-                if (ctor == null)
+                var passRequest = Activator.CreateInstance(PasswordRequestType);
+                if (passRequest == null)
                 {
-                    throw new Exception("Couldent create Password Request");
+                    Console.WriteLine("Falha ao criar instância de PasswordRequest.");
+                    return;
                 }
 
-                object passRequest;
-                passRequest = ctor.Invoke(null);
+                SetProperty(passRequest, "ConnectionPort", 18923);
+                SetProperty(passRequest, "ConnectionTimeout", 30);
+                SetProperty(passRequest, "AppID", "puertorico"); . // Here is the APPID 
+                SetProperty(passRequest, "Query", "Safe=dev-demo-cred;Folder=root;Username=appuser_db"); // HERE is Query to get the account
+                SetProperty(passRequest, "Reason", "DotNet accessing");
 
-                PropertyInfo propertyInfo = PasswordRequestType.GetProperty("ConnectionPort");
-                propertyInfo.SetValue(passRequest, 18923, null);
-                
-                propertyInfo = PasswordRequestType.GetProperty("ConnectionTimeout");
-                propertyInfo.SetValue(passRequest, 30, null);
-                
-                // Query propreties
-                propertyInfo = PasswordRequestType.GetProperty("AppID");
-                propertyInfo.SetValue(passRequest,"rpa01", null);
-                
-                // Was replaced by Query instead of passing the parameters, why do I need to place the object of type VirtualUserName
-                propertyInfo = PasswordRequestType.GetProperty("Query");
-                propertyInfo.SetValue(passRequest, "Safe=k8s-demo;Folder=root;VirtualUsername=demoaslan", null);
+                passwordResponse = PasswordSDKType.GetMethod("GetPassword")?.Invoke(null, new object[] { passRequest });
+                if (passwordResponse == null)
+                {
+                    Console.WriteLine("Falha ao obter resposta de senha.");
+                    return;
+                }
 
-            ////  Uncomment these if you want to use a default query, as UserName or other object type.
-                // propertyInfo = PasswordRequestType.GetProperty("Safe");
-                // propertyInfo.SetValue(passRequest, "k8s-demo", null);
-            
-                //    Not necessary    
-                // propertyInfo = PasswordRequestType.GetProperty("Folder");
-                // propertyInfo.SetValue(passRequest, "root", null);
-                
-                // propertyInfo = PasswordRequestType.GetProperty("Object");
-                // propertyInfo.SetValue(passRequest, "UserName=demoaslan", null);
-            ////
-                
-                propertyInfo = PasswordRequestType.GetProperty("Reason");
-                propertyInfo.SetValue(passRequest, "DotNet accessing", null);
+                var username = GetProperty(passwordResponse, PasswordResponseType, "UserName")?.ToString() ?? "defaultUser";
+                var passwordChars = (char[]?)GetProperty(passwordResponse, PasswordResponseType, "Content") ?? Array.Empty<char>();
+                var password = new string(passwordChars);
+                var address = "10.78.10.171";
 
-
-                // Sending the request to get the password
-                passwordResponse = PasswordSDKType.GetMethod("GetPassword").Invoke(null, new object[] { passRequest });
-
-
-                propertyInfo = PasswordResponseType.GetProperty("UserName");
-                var username = propertyInfo.GetValue(passwordResponse, null);
-                //Console.WriteLine(username);
-               
-                
-                propertyInfo = PasswordResponseType.GetProperty("Address");
-                var address = propertyInfo.GetValue(passwordResponse, null);
-                //use the address here
-                //Console.WriteLine(address);
-
-                // Analyzing the response
-                propertyInfo = PasswordResponseType.GetProperty("Content");
-                var password = (char[])propertyInfo.GetValue(passwordResponse, null);
-                //Console.WriteLine(password);
-                string passwd = new string(password);
-
-                // use the password here
-                 //using var connection = new MySqlConnection("Server={address};User ID={username};Password={password};Database=mydatabase");
-                var str = $"Server={address};User ID={username};Password={passwd}";
-                //Console.WriteLine(str);
-                          
-                using var connection = new MySqlConnection(str);
+                var connectionString = $"Server={address};User ID={username};Password={password};Database=userdb";
+                using var connection = new MySqlConnection(connectionString);
                 await connection.OpenAsync();
 
-                //using var command = new MySqlCommand("SELECT field FROM table;", connection);
-                using var command = new MySqlCommand("SHOW FULL PROCESSLIST;", connection);
+                using var command = new MySqlCommand("SELECT * FROM users;", connection);
                 using var reader = await command.ExecuteReaderAsync();
+
+                Console.WriteLine("Dados da tabela 'users':");
                 while (await reader.ReadAsync())
                 {
-                    var id = reader.GetValue(0);
-                    var user = reader.GetValue(1);
-                    var host = reader.GetValue(2);
-                    var db = reader.GetValue(3);
-                    var cmd = reader.GetValue(4);
-                    var time = reader.GetValue(5);
-                    var state = reader.GetValue(6);
-                    var info = reader.GetValue(7);
-                    // do something with 'value'
-                    //string top = "Id,User,Host,db,Command,Time,State,Info";
-                    //Console.WriteLine(top);
-                    string output_a = $"{id},{user},{host},{db},{cmd},{time},{state},{info}";
-                    Console.WriteLine(output_a);
-                }    
-    
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        Console.Write($"{reader.GetName(i)}: {reader.GetValue(i)}\t");
+                    }
+                    Console.WriteLine();
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                Console.WriteLine($"Erro: {ex.Message}");
             }
             finally
             {
-                // Always clear password form the memory
                 passwordResponse = null;
-
             }
+        }
+
+        static void SetProperty(object? obj, string propertyName, object value)
+        {
+            if (obj == null) return;
+            var prop = obj.GetType().GetProperty(propertyName);
+            prop?.SetValue(obj, value);
+        }
+
+        static object? GetProperty(object? obj, Type? type, string propertyName)
+        {
+            if (obj == null || type == null) return null;
+            var prop = type.GetProperty(propertyName);
+            return prop?.GetValue(obj);
         }
     }
 }
+
