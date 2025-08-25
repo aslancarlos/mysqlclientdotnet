@@ -1,9 +1,5 @@
 # CyberArk Credential Provider - .NET + MySQL Integration
 
-https://img.shields.io/badge/License-MIT-green.svg](https://choosealicense.com/licenses/mit/)
-https://img.shields.io/badge/.NET-6.0-blue.svg](https://dotnet.microsoft.com/)
-https://img.shields.io/badge/MySQL-Connector-orange.svg](https://www.nuget.org/packages/MySqlConnector/)
-[![CyberArk](https://img.shields.io/badge/CordSDK-lightgrey.svg](https://docs.cyberark.com/credential-providers/latest/en/Content/CP%20and%20ASCP/Net-Application-Password-SDK.htm)
 
 ## 📘 Overview
 
@@ -29,7 +25,6 @@ tial Provider installed and configured
 
 Install required packages via NuGet:
 
-
-dotnet add package netstandardpasswordsdk
-dotnet add package MySqlConnector
+- dotnet add package netstandardpasswordsdk
+- dotnet add package MySqlConnector
 
